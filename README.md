@@ -33,6 +33,77 @@ La aplicación corre en http://localhost:8085
     GET    /api/pedidos/{id}
     GET    /api/pedidos/cliente/{clienteId}
 
+## Diagrama de flujo del sistema
+
+```mermaid
+flowchart TD
+    HTTP([Petición HTTP])
+
+    HTTP -->|POST /api/clientes| CC[ClienteController]
+    HTTP -->|GET /api/clientes/:id| CC
+    HTTP -->|POST /api/productos| PC[ProductoController]
+    HTTP -->|GET /api/productos| PC
+    HTTP -->|POST /api/pedidos| PedC[PedidoController]
+    HTTP -->|GET /api/pedidos/:id| PedC
+    HTTP -->|GET /api/pedidos/cliente/:id| PedC
+
+    CC --> CSI[ClienteServiceImpl]
+    PC --> PSI[ProductoServiceImpl]
+    PedC --> PedSI[PedidoServiceImpl]
+
+    CSI --> CR[(ClienteRepository)]
+    PSI --> PR[(ProductoRepository)]
+    PedSI --> CR
+    PedSI --> PR
+    PedSI --> PedR[(PedidoRepository)]
+
+    CR --> DB[(PostgreSQL - db_pedidos)]
+    PR --> DB
+    PedR --> DB
+
+    PedSI -->|PedidoNotFoundException| GEH[GlobalExceptionHandler]
+    PedSI -->|StockInsuficienteException| GEH
+    PedSI -->|RuntimeException| GEH
+
+    GEH -->|BaseResponse 404/400/500| HTTP
+    CSI -->|BaseResponse 200/201| HTTP
+    PSI -->|BaseResponse 200/201| HTTP
+    PedSI -->|BaseResponse 200/201| HTTP
+```
+
+## Flujo de creación de pedido
+
+```mermaid
+flowchart TD
+    A([POST /api/pedidos]) --> B{¿Existe el cliente?}
+    B -->|No| E1[RuntimeException\nCliente no encontrado]
+    B -->|Sí| C[Por cada item del pedido]
+
+    C --> D{¿Existe el producto?}
+    D -->|No| E2[RuntimeException\nProducto no encontrado]
+    D -->|Sí| F{¿Cantidad > 0?}
+
+    F -->|No| E3[RuntimeException\nCantidad inválida]
+    F -->|Sí| G{¿Stock suficiente?}
+
+    G -->|No| E4[StockInsuficienteException\n400 Bad Request]
+    G -->|Sí| H[Calcular subtotal\nprecio x cantidad]
+
+    H --> I[Descontar stock del producto]
+    I --> J{¿Más items?}
+    J -->|Sí| C
+    J -->|No| K[Calcular total del pedido]
+
+    K --> L[Crear Pedido\nestado = CREADO]
+    L --> M[Guardar en base de datos]
+    M --> N([BaseResponse 201\nPedido creado correctamente])
+
+    E1 --> ERR([GlobalExceptionHandler\nBaseResponse con error])
+    E2 --> ERR
+    E3 --> ERR
+    E4 --> ERR
+```
+
 ## Ejemplos de uso
 
 Crear cliente:
